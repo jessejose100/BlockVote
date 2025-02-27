@@ -121,4 +121,49 @@
   (map-get? VoterRecords { poll-id: poll-id, voter: voter })
 )
 
+;; End a poll (only creator can call)
+(define-public (end-poll (poll-id uint))
+  (let
+    (
+      (poll (unwrap! (map-get? Polls { poll-id: poll-id }) ERR-POLL-NOT-FOUND))
+      (creator (get creator poll))
+      (question (get question poll))
+      (option-count (get option-count poll))
+      (end-height (get end-height poll))
+      (current-height block-height)
+      (is-active (get active poll))
+      (votes-opt1 (get votes (default-to { votes: u0 } (map-get? VoteCounts { poll-id: poll-id, option-id: u1 }))))
+      (votes-opt2 (get votes (default-to { votes: u0 } (map-get? VoteCounts { poll-id: poll-id, option-id: u2 }))))
+      (votes-opt3 (default-to u0 (get votes (map-get? VoteCounts { poll-id: poll-id, option-id: u3 }))))
+      (total-votes (+ votes-opt1 votes-opt2 votes-opt3))
+    )
+    ;; Authorization and state checks
+    (asserts! (is-eq tx-sender creator) ERR-NOT-AUTHORIZED)
+    (asserts! is-active ERR-VOTING-ENDED)
+    
+    ;; Update poll status
+    (map-set Polls
+      { poll-id: poll-id }
+      (merge poll { active: false })
+    )
+    
+    ;; Log detailed poll closure event
+    (print {
+      event: "poll-ended",
+      poll-id: poll-id,
+      question: question,
+      creator: creator,
+      option-count: option-count,
+      end-height: end-height,
+      closed-at: current-height,
+      votes-option1: votes-opt1,
+      votes-option2: votes-opt2,
+      votes-option3: votes-opt3,
+      total-votes-cast: total-votes
+    })
+    
+    ;; Return success
+    (ok true)
+  )
+)
 
